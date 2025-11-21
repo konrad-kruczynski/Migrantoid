@@ -223,6 +223,8 @@ namespace Migrantoid
             if(type.IsArray)
             {
                 WriteArrayMetadata((Array)o);
+                // Array is not inlined actually, only metadata goes to the stream right away.
+                // This is necessary to recreate it when deserializing.
                 return false;
             }
 
@@ -481,7 +483,7 @@ namespace Migrantoid
             {
                 var elementType = type.GetElementType();
                 var array = o as Array;
-                WriteArray(elementType, array);
+                WriteArrayElements(elementType, array);
                 return true;
             }
 
@@ -530,13 +532,13 @@ namespace Migrantoid
             }
         }
 
-        private void WriteArray(Type elementFormalType, Array array)
+        private void WriteArrayElements(Type elementFormalType, Array array)
         {
             var position = new int[array.Rank];
-            WriteArrayRowRecursive(array, 0, elementFormalType, position);
+            WriteArrayElementsRowRecursive(array, 0, elementFormalType, position);
         }
 
-        private void WriteArrayRowRecursive(Array array, int currentDimension, Type elementFormalType, int[] position)
+        private void WriteArrayElementsRowRecursive(Array array, int currentDimension, Type elementFormalType, int[] position)
         {
             var length = array.GetLength(currentDimension);
             for(var i = 0; i < length; i++)
@@ -548,7 +550,7 @@ namespace Migrantoid
                 }
                 else
                 {
-                    WriteArrayRowRecursive(array, currentDimension + 1, elementFormalType, position);
+                    WriteArrayElementsRowRecursive(array, currentDimension + 1, elementFormalType, position);
                 }
                 position[currentDimension]++;
                 for(var j = currentDimension + 1; j < array.Rank; j++)

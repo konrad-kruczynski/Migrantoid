@@ -1,4 +1,4 @@
-﻿// *******************************************************************
+﻿﻿// *******************************************************************
 //
 // Copyright (c) 2012-2016 Antmicro
 //
@@ -55,50 +55,7 @@ namespace Migrantoid.Generators
             }
             else if(type.IsArray)
             {
-                var isMultidimensional = type.GetArrayRank() > 1;
-                var elementFormalType = type.GetElementType();
-
-                var rankLocal = context.Generator.DeclareLocal(typeof(int));
-                var lengthsLocal = isMultidimensional ? context.Generator.DeclareLocal(typeof(int[])) : context.Generator.DeclareLocal(typeof(int));
-
-                context.PushObjectReaderOntoStack();
-                context.PushObjectIdOntoStack();
-
-                ReadMethodGenerator.GenerateReadPrimitive(context, typeof(int));
-                context.Generator.StoreLocalValueFromStack(rankLocal);
-                if(isMultidimensional)
-                {
-                    context.Generator.PushLocalValueOntoStack(rankLocal);
-                    context.Generator.Emit(OpCodes.Newarr, typeof(int));
-                    context.Generator.StoreLocalValueFromStack(lengthsLocal); // create an array for keeping the lengths of each dimension
-
-                    GeneratorHelper.GenerateLoop(context, rankLocal, i =>
-                    {
-                        context.Generator.PushLocalValueOntoStack(lengthsLocal);
-                        context.Generator.PushLocalValueOntoStack(i);
-                        ReadMethodGenerator.GenerateReadPrimitive(context, typeof(int));
-                        context.Generator.Emit(OpCodes.Stelem, typeof(int)); // populate the lengths with values read from stream
-                    });
-                }
-                else
-                {
-                    ReadMethodGenerator.GenerateReadPrimitive(context, typeof(int));
-                    context.Generator.StoreLocalValueFromStack(lengthsLocal);
-                }
-
-                context.Generator.PushTypeOntoStack(elementFormalType);
-                context.Generator.PushLocalValueOntoStack(lengthsLocal);
-
-                if(isMultidimensional)
-                {
-                    context.Generator.Call(() => Array.CreateInstance(null, new int[0]));
-                }
-                else
-                {
-                    context.Generator.Call(() => Array.CreateInstance(null, 0));
-                }
-
-                context.Generator.Call<ObjectReader>(x => x.SetObjectByReferenceId(0, null));
+                ReadMethodGenerator.GenerateReadArrayMetadataAndCreateInstance(context, type, context.PushObjectIdOntoStack);
             }
             else if(type == typeof(string))
             {

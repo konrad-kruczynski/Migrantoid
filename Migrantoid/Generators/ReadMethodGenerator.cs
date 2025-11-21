@@ -1,4 +1,4 @@
-﻿// *******************************************************************
+﻿﻿// *******************************************************************
 //
 // Copyright (c) 2012-2019 Antmicro
 // Copyright (c) 2021 Konrad Kruczyński
@@ -88,7 +88,7 @@ namespace Migrantoid.Generators
             }
             else if(formalType.IsArray)
             {
-                GenerateReadArray(context, formalType, pushObjectIdOntoStackAction);
+                GenerateReadArrayElements(context, formalType, pushObjectIdOntoStackAction);
             }
             else if(typeof(MulticastDelegate).IsAssignableFrom(formalType))
             {
@@ -587,7 +587,7 @@ namespace Migrantoid.Generators
             return Activator.CreateInstance(fi.FieldType, ctorAttribute.Parameters);
         }
 
-        private static void GenerateReadArray(ReaderGenerationContext context, Type arrayType, Action pushObjectIdOntoStackAction)
+        private static void GenerateReadArrayElements(ReaderGenerationContext context, Type arrayType, Action pushObjectIdOntoStackAction)
         {
             var isMultidimensional = arrayType.GetArrayRank() > 1;
             var elementFormalType = arrayType.GetElementType();
@@ -680,7 +680,7 @@ namespace Migrantoid.Generators
                 context.Generator.PushLocalValueOntoStack(lengthsLocal);
                 context.Generator.PushLocalValueOntoStack(rankLocal);
 
-                context.Generator.GenerateCodeFCall<int[], int[], int, bool>(GenerateReadArrayStaticHelper);
+                context.Generator.GenerateCodeFCall<int[], int[], int, bool>(GenerateReadArrayElementsStaticHelper);
             }
             else
             {
@@ -699,7 +699,7 @@ namespace Migrantoid.Generators
             context.Generator.MarkLabel(loopEndLabel);
         }
 
-        private static bool GenerateReadArrayStaticHelper(int[] counter, int[] sizes, int ranks)
+        private static bool GenerateReadArrayElementsStaticHelper(int[] counter, int[] sizes, int ranks)
         {
             var currentRank = ranks - 1;
 
@@ -716,6 +716,55 @@ namespace Migrantoid.Generators
             }
 
             return false;
+        }
+
+        internal static void GenerateReadArrayMetadataAndCreateInstance(ReaderGenerationContext context, Type arrayType, Action pushObjectIdOntoStackAction)
+        {
+            var isMultidimensional = arrayType.GetArrayRank() > 1;
+            var elementFormalType = arrayType.GetElementType();
+
+            var rankLocal = context.Generator.DeclareLocal(typeof(int));
+            var lengthsLocal = isMultidimensional ? context.Generator.DeclareLocal(typeof(int[])) : context.Generator.DeclareLocal(typeof(int));
+
+            context.PushObjectReaderOntoStack();
+            pushObjectIdOntoStackAction();
+
+            GenerateReadPrimitive(context, typeof(int));
+            context.Generator.StoreLocalValueFromStack(rankLocal);
+            
+            if(isMultidimensional)
+            {
+                context.Generator.PushLocalValueOntoStack(rankLocal);
+                context.Generator.Emit(OpCodes.Newarr, typeof(int));
+                context.Generator.StoreLocalValueFromStack(lengthsLocal);
+
+                GeneratorHelper.GenerateLoop(context, rankLocal, i =>
+                {
+                    context.Generator.PushLocalValueOntoStack(lengthsLocal);
+                    context.Generator.PushLocalValueOntoStack(i);
+                    GenerateReadPrimitive(context, typeof(int));
+                    context.Generator.Emit(OpCodes.Stelem, typeof(int));
+                });
+            }
+            else
+            {
+                GenerateReadPrimitive(context, typeof(int));
+                context.Generator.StoreLocalValueFromStack(lengthsLocal);
+            }
+
+            context.Generator.PushTypeOntoStack(elementFormalType);
+            context.Generator.PushLocalValueOntoStack(lengthsLocal);
+
+            if(isMultidimensional)
+            {
+                context.Generator.Call(() => Array.CreateInstance(null, new int[0]));
+            }
+            else
+            {
+                context.Generator.Call(() => Array.CreateInstance(null, 0));
+            }
+
+            context.Generator.Call<ObjectReader>(x => x.SetObjectByReferenceId(0, null));
         }
 
         private static void GenerateReadDelegate(ReaderGenerationContext context, Type type, Action pushObjectIdOntoStackAction)

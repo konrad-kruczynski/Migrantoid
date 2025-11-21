@@ -310,7 +310,7 @@ namespace Migrantoid
             }
             else if(type.IsArray)
             {
-                ReadArray(type.GetElementType(), objectId);
+                ReadArrayElements(type.GetElementType(), objectId);
             }
             else
             {
@@ -593,11 +593,11 @@ namespace Migrantoid
             SetObjectByReferenceId(objectId, array);
         }
 
-        private void ReadArray(Type elementFormalType, int objectId)
+        private void ReadArrayElements(Type elementFormalType, int objectId)
         {
             var array = (Array)GetObjectByReferenceId(objectId);
             var position = new int[array.Rank];
-            FillArrayRowRecursive(array, 0, position, elementFormalType);
+            FillArrayElementsRowRecursive(array, 0, position, elementFormalType);
         }
 
         private void ReadDelegate(Type type, int objectId)
@@ -618,7 +618,7 @@ namespace Migrantoid
             SetObjectByReferenceId(objectId, result);
         }
 
-        private void FillArrayRowRecursive(Array array, int currentDimension, int[] position, Type elementFormalType)
+        private void FillArrayElementsRowRecursive(Array array, int currentDimension, int[] position, Type elementFormalType)
         {
             var length = array.GetLength(currentDimension);
             for(var i = 0; i < length; i++)
@@ -630,7 +630,7 @@ namespace Migrantoid
                 }
                 else
                 {
-                    FillArrayRowRecursive(array, currentDimension + 1, position, elementFormalType);
+                    FillArrayElementsRowRecursive(array, currentDimension + 1, position, elementFormalType);
                 }
                 position[currentDimension]++;
                 for(var j = currentDimension + 1; j < array.Rank; j++)

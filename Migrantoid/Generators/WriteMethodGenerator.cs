@@ -178,7 +178,7 @@ namespace Migrantoid.Generators
             }
             if(actualType.IsArray)
             {
-                GenerateWriteArray(context, value, actualType);
+                GenerateWriteArrayElements(context, value, actualType);
                 return true;
             }
             if(typeof(MulticastDelegate).IsAssignableFrom(actualType))
@@ -198,12 +198,12 @@ namespace Migrantoid.Generators
             return false;
         }
 
-        private static void GenerateWriteArray(WriterGenerationContext context, Variable arrayLocal, Type actualType)
+        private static void GenerateWriteArrayElements(WriterGenerationContext context, Variable arrayLocal, Type actualType)
         {
             var rank = actualType.GetArrayRank();
             if(rank != 1)
             {
-                GenerateWriteMultidimensionalArray(context, arrayLocal, actualType, rank);
+                GenerateWriteMultidimensionalArrayElements(context, arrayLocal, actualType, rank);
                 return;
             }
 
@@ -228,7 +228,7 @@ namespace Migrantoid.Generators
             });
         }
 
-        private static void GenerateWriteMultidimensionalArray(WriterGenerationContext context, Variable arrayLocal, Type actualType, int rank)
+        private static void GenerateWriteMultidimensionalArrayElements(WriterGenerationContext context, Variable arrayLocal, Type actualType, int rank)
         {
             var elementType = actualType.GetElementType();
 
@@ -252,10 +252,10 @@ namespace Migrantoid.Generators
             // writing elements
             var currentElementLocal = context.Generator.DeclareLocal(elementType);
             var currentElementVariable = new Variable(currentElementLocal);
-            GenerateArrayWriteLoop(context, 0, rank, indexLocals, lengthLocals, arrayLocal, currentElementVariable, actualType, elementType);
+            GenerateArrayElementsWriteLoop(context, 0, rank, indexLocals, lengthLocals, arrayLocal, currentElementVariable, actualType, elementType);
         }
 
-        private static void GenerateArrayWriteLoop(WriterGenerationContext context, int currentDimension, int rank, LocalBuilder[] indexLocals, LocalBuilder[] lengthLocals, Variable arrayLocal, Variable currentElementVariable, Type arrayType, Type elementType)
+        private static void GenerateArrayElementsWriteLoop(WriterGenerationContext context, int currentDimension, int rank, LocalBuilder[] indexLocals, LocalBuilder[] lengthLocals, Variable arrayLocal, Variable currentElementVariable, Type arrayType, Type elementType)
         {
             GeneratorHelper.GenerateLoop(context, lengthLocals[currentDimension], indexLocals[currentDimension], () =>
             {
@@ -273,7 +273,7 @@ namespace Migrantoid.Generators
                 }
                 else
                 {
-                    GenerateArrayWriteLoop(context, currentDimension + 1, rank, indexLocals, lengthLocals, arrayLocal, currentElementVariable, arrayType, elementType);
+                    GenerateArrayElementsWriteLoop(context, currentDimension + 1, rank, indexLocals, lengthLocals, arrayLocal, currentElementVariable, arrayType, elementType);
                 }
             });
         }
@@ -514,35 +514,8 @@ namespace Migrantoid.Generators
         {
             if(actualType.IsArray)
             {
-                var rank = actualType.GetArrayRank();
-
-                // write rank
-                context.PushPrimitiveWriterOntoStack();
-                context.Generator.PushIntegerOntoStack(rank);
-                context.Generator.Call<PrimitiveWriter>(x => x.Write(0));
-
-                if(rank == 1)
-                {
-                    // write length
-                    context.PushPrimitiveWriterOntoStack();
-                    context.Generator.PushVariableOntoStack(valueLocal);
-                    context.Generator.Emit(OpCodes.Castclass, actualType);
-                    context.Generator.Emit(OpCodes.Ldlen);
-                    context.Generator.Call<PrimitiveWriter>(x => x.Write(0));
-                }
-                else
-                {
-                    // write lengths in loop
-                    for(var i = 0; i < rank; i++)
-                    {
-                        context.PushPrimitiveWriterOntoStack();
-                        context.Generator.PushVariableOntoStack(valueLocal);
-                        context.Generator.PushIntegerOntoStack(i);
-                        context.Generator.Call<Array>(x => x.GetLength(0));
-                        context.Generator.Call<PrimitiveWriter>(x => x.Write(0));
-                    }
-                }
-                return false;
+                GenerateWriteArrayMetadata(context, valueLocal, actualType);
+                return false;  // Array elements are written deferred, not inline
             }
             if(actualType == typeof(string))
             {
@@ -557,6 +530,38 @@ namespace Migrantoid.Generators
             }
 
             return GenerateSpecialWrite(context, actualType, valueLocal, false);
+        }
+
+        private static void GenerateWriteArrayMetadata(WriterGenerationContext context, Variable valueLocal, Type actualType)
+        {
+            var rank = actualType.GetArrayRank();
+
+            // write rank
+            context.PushPrimitiveWriterOntoStack();
+            context.Generator.PushIntegerOntoStack(rank);
+            context.Generator.Call<PrimitiveWriter>(x => x.Write(0));
+
+            if(rank == 1)
+            {
+                // write length
+                context.PushPrimitiveWriterOntoStack();
+                context.Generator.PushVariableOntoStack(valueLocal);
+                context.Generator.Emit(OpCodes.Castclass, actualType);
+                context.Generator.Emit(OpCodes.Ldlen);
+                context.Generator.Call<PrimitiveWriter>(x => x.Write(0));
+            }
+            else
+            {
+                // write lengths in loop
+                for(var i = 0; i < rank; i++)
+                {
+                    context.PushPrimitiveWriterOntoStack();
+                    context.Generator.PushVariableOntoStack(valueLocal);
+                    context.Generator.PushIntegerOntoStack(i);
+                    context.Generator.Call<Array>(x => x.GetLength(0));
+                    context.Generator.Call<PrimitiveWriter>(x => x.Write(0));
+                }
+            }
         }
 
         private static void GenerateInvokeCallbacksAndExecute(WriterGenerationContext context, bool generatePreSerializationCallback, bool generatePostSerializationCallback, Variable valueLocal, Type type, Action<WriterGenerationContext> bodyBuilder)
