@@ -427,6 +427,12 @@ namespace Migrantoid
             HashCodeBasedWaitingValues.Add(keyId, (dictionary, value));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void AddHashCodeBasedWaitingValue<TValue>(object dictionary, int keyId, TValue value)
+        {
+            HashCodeBasedWaitingValues.Add(keyId, (dictionary, value));
+        }
+
         private object ReadField(Type formalType)
         {
             if(Helpers.IsTransient(formalType))

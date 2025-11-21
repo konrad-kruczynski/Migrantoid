@@ -267,13 +267,26 @@ namespace Migrantoid.Generators
                         if (collectionToken.IsDictionary)
                         {
                             context.Generator.PushLocalValueOntoStack(valueLocal);
+                            if (collectionToken.FormalValueType.IsValueType)
+                            {
+                                // Use generic overload to avoid boxing at call site
+                                var genericMethod = typeof(ObjectReader)
+                                    .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic)
+                                    .First(m => m.Name == nameof(ObjectReader.AddHashCodeBasedWaitingValue) &&
+                                                m.IsGenericMethodDefinition);
+                                var specificMethod = genericMethod.MakeGenericMethod(collectionToken.FormalValueType);
+                                context.Generator.Emit(OpCodes.Call, specificMethod);
+                            }
+                            else
+                            {
+                                context.Generator.Call<ObjectReader>(or => or.AddHashCodeBasedWaitingValue(null, 0, null));
+                            }
                         }
                         else
                         {
                             context.Generator.Emit(OpCodes.Ldnull);
+                            context.Generator.Call<ObjectReader>(or => or.AddHashCodeBasedWaitingValue(null, 0, null));
                         }
-
-                        context.Generator.Call<ObjectReader>(or => or.AddHashCodeBasedWaitingValue(null, 0, null));
 
                         context.Generator.MarkLabel(exitLabel);
                     }
